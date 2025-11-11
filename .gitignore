@@ -1,0 +1,29 @@
+# AWS Deployment Files
+*.pem
+.instance-id
+.public-ip
+.web-sg-id
+.bucket-name
+user-data.sh
+
+# OS Files
+.DS_Store
+Thumbs.db
+
+# IDE Files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+
+# Environment Files
+.env
+.env.local
+.env.production
+
+# Temporary Files
+*.tmp
+*.temp
