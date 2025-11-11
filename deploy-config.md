@@ -14,9 +14,16 @@
    aws configure
    ```
 
-2. **Git repository setup**:
+2. **Node.js 18+ installed locally** (for frontend builds):
+   ```bash
+   # Install Node.js
+   curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+   sudo apt-get install -y nodejs
+   ```
+
+3. **Git repository setup**:
    - Push your code to GitHub/GitLab
-   - Update the git clone URL in `deploy.sh` (line 95)
+   - Update the git clone URL in `deploy.sh`
 
 ### Deploy Your Application
 
@@ -32,6 +39,12 @@ chmod +x deploy.sh
 
 # Deploy updates later
 ./deploy.sh deploy
+
+# Deploy only backend (Java changes)
+./deploy.sh backend
+
+# Deploy only frontend (React changes)
+./deploy.sh frontend
 
 # Destroy all resources
 ./deploy.sh destroy
@@ -53,7 +66,26 @@ GIT_REPO="https://github.com/yogeshkaledev/daily-routine"
 APP_NAME="daily-routine"           # Your app name
 REGION="us-east-1"                # AWS region
 INSTANCE_TYPE="t2.micro"          # EC2 instance type
+JAVA_VERSION="21 (Amazon Corretto)" # Java runtime
 ```
+
+### 3. Technology Stack
+- **Backend**: Spring Boot 3.2.0 with Java 21 (Amazon Corretto)
+- **Frontend**: React 18 with Vite (built locally)
+- **Database**: H2 in-memory
+- **Web Server**: Nginx (reverse proxy)
+- **Deployment**: Systemd services
+
+## 🏗️ Available Commands
+
+| Command | Description | Use Case |
+|---------|-------------|----------|
+| `init` | Full deployment | First-time setup |
+| `deploy` | Update everything | Major updates |
+| `backend` | Backend only | Java code changes |
+| `frontend` | Frontend only | React/UI changes |
+| `status` | Show info | Check deployment |
+| `destroy` | Delete all | Cleanup resources |
 
 ## 🏗️ What the Script Does
 
@@ -61,18 +93,30 @@ INSTANCE_TYPE="t2.micro"          # EC2 instance type
 1. ✅ Creates EC2 key pair
 2. ✅ Sets up security groups (web server)
 3. ✅ Launches EC2 instance with auto-setup
-4. ✅ Installs Java 21, Git, Nginx
-5. ✅ Clones and builds your application
+4. ✅ Installs Java 21 (Amazon Corretto), Git, Nginx
+5. ✅ Clones and builds your Spring Boot application
 6. ✅ Configures systemd service with H2 database
 7. ✅ Sets up Nginx reverse proxy
-8. ✅ Builds and deploys React frontend
-9. ✅ Creates S3 bucket for backups
+8. ✅ Creates S3 bucket for backups
+9. ✅ Frontend built locally and uploaded
 
 ### `./deploy.sh deploy`
 - Updates code from Git
-- Rebuilds backend and frontend
+- Rebuilds backend (Java 21 Corretto) and frontend
 - Restarts services
 - Zero-downtime deployment
+
+### `./deploy.sh backend`
+- Updates backend code only
+- Rebuilds with Java 21 (Amazon Corretto)
+- Restarts Spring Boot service
+- Faster for Java-only changes
+
+### `./deploy.sh frontend`
+- Builds React frontend locally
+- Uploads to server
+- Reloads Nginx
+- Faster for UI-only changes
 
 ### `./deploy.sh status`
 - Shows instance details
@@ -154,10 +198,12 @@ http://YOUR_EC2_IP:8080/h2-console
 ## 🚨 Important Notes
 
 1. **Backup your SSH key**: Save `daily-routine-key.pem` securely
-2. **Update Git URL**: Must update repository URL before running
-3. **AWS Limits**: Ensure you're within Free Tier limits
-4. **Domain Setup**: For production, configure a domain name
-5. **SSL Certificate**: Add Let's Encrypt for HTTPS in production
+2. **Node.js required locally**: Frontend builds on your machine, not server
+3. **Java 21 Corretto**: Backend uses Amazon Corretto JDK 21
+4. **AWS Limits**: Ensure you're within Free Tier limits
+5. **Domain Setup**: For production, configure a domain name
+6. **SSL Certificate**: Add Let's Encrypt for HTTPS in production
+7. **Local builds**: Frontend builds faster locally than on EC2
 
 ## 📞 Support
 

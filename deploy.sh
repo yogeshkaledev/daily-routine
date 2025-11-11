@@ -97,13 +97,17 @@ create_user_data() {
     cat > user-data.sh << EOF
 #!/bin/bash
 yum update -y
-yum install -y java-21-amazon-corretto-devel git nginx
+yum install -y java-21-amazon-corretto-devel git
 
 # Set JAVA_HOME for JDK 21
 export JAVA_HOME=/usr/lib/jvm/java-21-amazon-corretto
 export PATH=\$JAVA_HOME/bin:\$PATH
 echo 'export JAVA_HOME=/usr/lib/jvm/java-21-amazon-corretto' >> /etc/environment
 echo 'export PATH=\$JAVA_HOME/bin:\$PATH' >> /etc/environment
+
+# Install nginx from nginx.org repository
+rpm -Uvh http://nginx.org/packages/centos/7/noarch/RPMS/nginx-release-centos-7-0.el7.ngx.noarch.rpm
+yum install -y nginx
 
 # Create app directory
 mkdir -p /opt/daily-routine
@@ -166,24 +170,15 @@ server {
 }
 EOL
 
+# Create web directory
+mkdir -p /var/www/html
+
 # Start services
 systemctl daemon-reload
 systemctl enable daily-routine nginx
-systemctl start nginx
 systemctl start daily-routine
+systemctl start nginx
 
-# Build and deploy frontend
-cd /opt/daily-routine/frontend
-curl -fsSL https://rpm.nodesource.com/setup_18.x | bash -
-yum install -y nodejs
-npm install
-npm run build
-cp -r dist/* /var/www/html/
-
-# Update API URL in frontend
-sed -i 's|http://localhost:8080/api|/api|g' /var/www/html/assets/*.js
-
-systemctl restart nginx
 EOF
 }
 
@@ -226,6 +221,58 @@ create_s3_bucket() {
     log "S3 bucket created: $BUCKET_NAME"
 }
 
+build_and_deploy_frontend() {
+    log "Building frontend locally..."
+    cd frontend
+    npm install
+    npm run build
+    
+    log "Uploading frontend to server..."
+    PUBLIC_IP=$(cat ../.public-ip)
+    scp -i ../${KEY_NAME}.pem -o StrictHostKeyChecking=no -r dist/* ec2-user@$PUBLIC_IP:/tmp/frontend/
+    
+    ssh -i ../${KEY_NAME}.pem -o StrictHostKeyChecking=no ec2-user@$PUBLIC_IP << 'EOF'
+sudo rm -rf /var/www/html/*
+sudo cp -r /tmp/frontend/* /var/www/html/
+sudo systemctl reload nginx
+rm -rf /tmp/frontend
+EOF
+    
+    cd ..
+    log "Frontend deployed successfully!"
+}
+
+deploy_backend_only() {
+    if [ ! -f .instance-id ]; then
+        error "No instance found. Run './deploy.sh init' first."
+    fi
+    
+    PUBLIC_IP=$(cat .public-ip)
+    
+    log "Deploying backend to $PUBLIC_IP..."
+    
+    # Wait for SSH to be available
+    log "Waiting for SSH access..."
+    while ! ssh -i ${KEY_NAME}.pem -o ConnectTimeout=5 -o StrictHostKeyChecking=no ec2-user@$PUBLIC_IP "echo 'SSH Ready'" 2>/dev/null; do
+        sleep 10
+    done
+    
+    # Deploy backend only
+    ssh -i ${KEY_NAME}.pem -o StrictHostKeyChecking=no ec2-user@$PUBLIC_IP << 'EOF'
+cd /opt/daily-routine
+sudo git pull origin main 2>/dev/null || echo "Git pull failed - manual update needed"
+cd backend
+# Ensure JDK 21 (Corretto) is used
+export JAVA_HOME=/usr/lib/jvm/java-21-amazon-corretto
+export PATH=$JAVA_HOME/bin:$PATH
+sudo -E ./mvnw clean package -DskipTests
+sudo systemctl restart daily-routine
+EOF
+    
+    log "Backend deployed successfully!"
+    log "API endpoint: http://$PUBLIC_IP/api"
+}
+
 deploy_application() {
     if [ ! -f .instance-id ]; then
         error "No instance found. Run './deploy.sh init' first."
@@ -242,23 +289,20 @@ deploy_application() {
         sleep 10
     done
     
-    # Deploy latest code
+    # Deploy backend with Java 21 Corretto
     ssh -i ${KEY_NAME}.pem -o StrictHostKeyChecking=no ec2-user@$PUBLIC_IP << 'EOF'
 cd /opt/daily-routine
 sudo git pull origin main 2>/dev/null || echo "Git pull failed - manual update needed"
 cd backend
-# Ensure JDK 21 is used
+# Ensure JDK 21 (Amazon Corretto) is used
 export JAVA_HOME=/usr/lib/jvm/java-21-amazon-corretto
 export PATH=$JAVA_HOME/bin:$PATH
 sudo -E ./mvnw clean package -DskipTests
 sudo systemctl restart daily-routine
-
-# Rebuild frontend
-cd ../frontend
-sudo npm run build
-sudo cp -r dist/* /var/www/html/
-sudo systemctl restart nginx
 EOF
+    
+    # Build and deploy frontend locally
+    build_and_deploy_frontend
     
     log "Application deployed successfully!"
     log "Access your application at: http://$PUBLIC_IP"
@@ -351,6 +395,20 @@ case "${1:-help}" in
         deploy_application
         ;;
     
+    "frontend")
+        log "Building and deploying frontend only..."
+        if [ ! -f .instance-id ]; then
+            error "No instance found. Run './deploy.sh init' first."
+        fi
+        build_and_deploy_frontend
+        ;;
+    
+    "backend")
+        log "Deploying backend only..."
+        check_aws_cli
+        deploy_backend_only
+        ;;
+    
     "status")
         show_status
         ;;
@@ -367,13 +425,17 @@ case "${1:-help}" in
         echo ""
         echo "Commands:"
         echo "  init     - Initialize and deploy the application"
-        echo "  deploy   - Deploy application updates"
+        echo "  deploy   - Deploy application updates (backend + frontend)"
+        echo "  backend  - Deploy backend only (Java 21 Corretto)"
+        echo "  frontend - Build and deploy frontend only"
         echo "  status   - Show deployment status"
         echo "  destroy  - Destroy all AWS resources"
         echo "  help     - Show this help message"
         echo ""
         echo "Prerequisites:"
         echo "  - AWS CLI installed and configured"
+        echo "  - Node.js 18+ installed locally (for frontend builds)"
+        echo "  - Backend uses Java 21 (Amazon Corretto)"
         echo "  - Git repository with your code"
         echo "  - Update the git clone URL in this script"
         ;;
