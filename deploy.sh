@@ -99,6 +99,12 @@ create_user_data() {
 yum update -y
 yum install -y java-21-amazon-corretto-devel git nginx
 
+# Set JAVA_HOME for JDK 21
+export JAVA_HOME=/usr/lib/jvm/java-21-amazon-corretto
+export PATH=\$JAVA_HOME/bin:\$PATH
+echo 'export JAVA_HOME=/usr/lib/jvm/java-21-amazon-corretto' >> /etc/environment
+echo 'export PATH=\$JAVA_HOME/bin:\$PATH' >> /etc/environment
+
 # Create app directory
 mkdir -p /opt/daily-routine
 cd /opt/daily-routine
@@ -109,6 +115,9 @@ git clone ${GIT_REPO} .
 # Build backend
 cd backend
 chmod +x mvnw
+# Ensure we're using JDK 21
+export JAVA_HOME=/usr/lib/jvm/java-21-amazon-corretto
+export PATH=\$JAVA_HOME/bin:\$PATH
 ./mvnw clean package -DskipTests
 
 # Create systemd service
@@ -121,10 +130,11 @@ After=network.target
 Type=simple
 User=ec2-user
 WorkingDirectory=/opt/daily-routine/backend
-ExecStart=/usr/bin/java -jar target/daily-routine-backend-1.0.0.jar
+ExecStart=/usr/lib/jvm/java-21-amazon-corretto/bin/java -jar target/daily-routine-backend-1.0.0.jar
 Restart=always
 RestartSec=10
 
+Environment=JAVA_HOME=/usr/lib/jvm/java-21-amazon-corretto
 Environment=DATABASE_URL=jdbc:h2:mem:dailyroutine
 Environment=DB_USERNAME=sa
 Environment=DB_PASSWORD=
@@ -237,7 +247,10 @@ deploy_application() {
 cd /opt/daily-routine
 sudo git pull origin main 2>/dev/null || echo "Git pull failed - manual update needed"
 cd backend
-sudo ./mvnw clean package -DskipTests
+# Ensure JDK 21 is used
+export JAVA_HOME=/usr/lib/jvm/java-21-amazon-corretto
+export PATH=$JAVA_HOME/bin:$PATH
+sudo -E ./mvnw clean package -DskipTests
 sudo systemctl restart daily-routine
 
 # Rebuild frontend
