@@ -232,10 +232,10 @@ build_and_deploy_frontend() {
     scp -i ../${KEY_NAME}.pem -o StrictHostKeyChecking=no -r dist/* ec2-user@$PUBLIC_IP:/tmp/frontend/
     
     ssh -i ../${KEY_NAME}.pem -o StrictHostKeyChecking=no ec2-user@$PUBLIC_IP << 'EOF'
-sudo rm -rf /var/www/html/*
-sudo cp -r /tmp/frontend/* /var/www/html/
-sudo systemctl reload nginx
-rm -rf /tmp/frontend
+/usr/bin/sudo /usr/bin/rm -rf /var/www/html/*
+/usr/bin/sudo /usr/bin/cp -r /tmp/frontend/* /var/www/html/
+/usr/bin/sudo /usr/bin/systemctl reload nginx
+/usr/bin/rm -rf /tmp/frontend
 EOF
     
     cd ..
@@ -260,13 +260,13 @@ deploy_backend_only() {
     # Deploy backend only
     ssh -i ${KEY_NAME}.pem -o StrictHostKeyChecking=no ec2-user@$PUBLIC_IP << 'EOF'
 cd /opt/daily-routine
-sudo git pull origin main 2>/dev/null || echo "Git pull failed - manual update needed"
+/usr/bin/sudo /usr/bin/git pull origin main 2>/dev/null || echo "Git pull failed - manual update needed"
 cd backend
 # Ensure JDK 21 (Corretto) is used
 export JAVA_HOME=/usr/lib/jvm/java-21-amazon-corretto
 export PATH=$JAVA_HOME/bin:$PATH
-sudo -E ./mvnw clean package -DskipTests
-sudo systemctl restart daily-routine
+/usr/bin/sudo -E ./mvnw clean package -DskipTests
+/usr/bin/sudo /usr/bin/systemctl restart daily-routine
 EOF
     
     log "Backend deployed successfully!"
@@ -292,13 +292,13 @@ deploy_application() {
     # Deploy backend with Java 21 Corretto
     ssh -i ${KEY_NAME}.pem -o StrictHostKeyChecking=no ec2-user@$PUBLIC_IP << 'EOF'
 cd /opt/daily-routine
-sudo git pull origin main 2>/dev/null || echo "Git pull failed - manual update needed"
+/usr/bin/sudo /usr/bin/git pull origin main 2>/dev/null || echo "Git pull failed - manual update needed"
 cd backend
 # Ensure JDK 21 (Amazon Corretto) is used
 export JAVA_HOME=/usr/lib/jvm/java-21-amazon-corretto
 export PATH=$JAVA_HOME/bin:$PATH
-sudo -E ./mvnw clean package -DskipTests
-sudo systemctl restart daily-routine
+/usr/bin/sudo -E ./mvnw clean package -DskipTests
+/usr/bin/sudo /usr/bin/systemctl restart daily-routine
 EOF
     
     # Build and deploy frontend locally
