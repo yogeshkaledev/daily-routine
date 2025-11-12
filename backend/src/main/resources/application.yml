@@ -4,7 +4,6 @@ spring:
     driver-class-name: org.h2.Driver
     username: sa
     password: 
-  jpa:
     hibernate:
       ddl-auto: create-drop
     show-sql: true
@@ -13,7 +12,9 @@ spring:
         format_sql: true
   sql:
     init:
-      mode: never
+      mode: always
+  jpa:
+    defer-datasource-initialization: true
   h2:
     console:
       enabled: true
